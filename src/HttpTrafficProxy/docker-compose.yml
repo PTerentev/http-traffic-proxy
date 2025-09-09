@@ -1,0 +1,24 @@
+version: "3.9"
+services:
+  http-traffic-proxy:
+    user: "0:0"
+    build:
+      dockerfile: ./HttpTrafficProxy.Web/Dockerfile
+    image: http-traffic-proxy:dev
+    container_name: http-traffic-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      MessageBroker__DirectoryPath: /app/broker
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      ASPNETCORE_ENVIRONMENT: Development
+    volumes:
+      - brokerdata:/app/broker
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+volumes:
+  brokerdata: {}

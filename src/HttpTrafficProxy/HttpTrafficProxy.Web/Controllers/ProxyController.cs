@@ -1,5 +1,6 @@
 using HttpTrafficProxy.Application.RequestHandlers.Abstractions;
 using HttpTrafficProxy.Domain;
+using HttpTrafficProxy.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HttpTrafficProxy.Controllers;
@@ -19,19 +20,15 @@ public class ProxyController : ControllerBase
     [Route("{*path}")]
     public async Task<IActionResult> HandleAsync(string? path, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return ValidationProblem(title: "Не указан запрос к серверу.");
-        }
+        var fullPath = string.Concat("/", path ?? string.Empty, HttpContext.Request.QueryString.Value);
+
+        var request = new HttpProxyRequest(
+            Path: fullPath,
+            Method: HttpContext.Request.Method);
 
         try
         {
-            var request = new HttpProxyRequest(
-                Path: path,
-                Method: HttpContext.Request.Method);
-
             var response = await requestHandler.HandleAsync(request, cancellationToken);
-
             HttpContext.Response.StatusCode = response.StatusCode;
             if (!string.IsNullOrEmpty(response.Body))
             {
@@ -40,13 +37,13 @@ public class ProxyController : ControllerBase
          
             return new EmptyResult();
         }
-        catch (ApplicationException)
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
         {
-            return StatusCode(500, "Ошибка системы.");
+            return StatusCode(StatusCodes.Status499ClientClosedRequest);
         }
-        catch (Exception)
+        catch (HttpProxyException e)
         {
-            throw;
+            return Problem(title: "Ошибка при выполнении запроса.", detail: e.Message);
         }
     }
 }

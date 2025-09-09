@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace HttpTrafficProxy.Domain.Exceptions;
 
-public class ApplicationException : Exception
+public class HttpProxyException : Exception
 {
-    public ApplicationException(string message) : base(message)
+    public HttpProxyException(string message) : base(message)
     {
     }
 }

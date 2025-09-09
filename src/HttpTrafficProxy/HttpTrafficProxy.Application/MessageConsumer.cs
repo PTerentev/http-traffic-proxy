@@ -24,15 +24,9 @@ internal class MessageConsumer : BackgroundService
     {
         logger.LogInformation("Запущенна логика обработки входящих сообщений из брокера.");
 
-        while (messageRegistry.IsEmpty())
-        {
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-        }
-
         await foreach (var message in messageReader.ReadAsync(cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             messageRegistry.Complete(message);
         }
     }

@@ -2,7 +2,6 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
-USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
@@ -12,19 +11,23 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["HttpTrafficProxy.Web/HttpTrafficProxy.Web.csproj", "HttpTrafficProxy.Web/"]
-RUN dotnet restore "./HttpTrafficProxy.Web/HttpTrafficProxy.Web.csproj"
+COPY ["HttpTrafficProxy.Web/HttpTrafficProxy.csproj", "HttpTrafficProxy.Web/"]
+COPY ["HttpTrafficProxy.Abstractions/HttpTrafficProxy.Services.Abstractions.csproj", "HttpTrafficProxy.Abstractions/"]
+COPY ["HttpTrafficProxy.Domain/HttpTrafficProxy.Domain.csproj", "HttpTrafficProxy.Domain/"]
+COPY ["HttpTrafficProxy.Application/HttpTrafficProxy.Application.csproj", "HttpTrafficProxy.Application/"]
+COPY ["HttpTrafficProxy.Infrastructure/HttpTrafficProxy.Services.csproj", "HttpTrafficProxy.Infrastructure/"]
+RUN dotnet restore "./HttpTrafficProxy.Web/HttpTrafficProxy.csproj"
 COPY . .
 WORKDIR "/src/HttpTrafficProxy.Web"
-RUN dotnet build "./HttpTrafficProxy.Web.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./HttpTrafficProxy.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./HttpTrafficProxy.Web.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./HttpTrafficProxy.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "HttpTrafficProxy.Web.dll"]
+ENTRYPOINT ["dotnet", "HttpTrafficProxy.dll"]

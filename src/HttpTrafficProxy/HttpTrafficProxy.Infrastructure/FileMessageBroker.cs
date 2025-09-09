@@ -57,7 +57,12 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
 
         isDisposed = true;
 
+        brokerCancellationTokenSource.Cancel(throwOnFirstException: false);
         brokerCancellationTokenSource.Dispose();
+
+        fileSystemWatcher.EnableRaisingEvents = false;
+        fileSystemWatcher.Dispose();
+
 
         writeSemaphore.Dispose();
         responseMessageChannel.Writer.TryComplete();
@@ -74,7 +79,7 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
             new BoundedChannelOptions(brokerOptions.ResponseCacheCount)
             {
                 SingleWriter = false,
-                SingleReader = false
+                SingleReader = true
             });
 
         var responseFileFilter = $"*{ResponseFileExtension}";
@@ -96,7 +101,7 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
 
         RunCleaningUpExpiredFiles();
 
-        logger.LogInformation("Инициализация брокера сообщений окончена. Путь к папке: {folder} .", brokerDirectory.FullName);
+        logger.LogDebug("Инициализация брокера сообщений окончена. Путь к папке: {folder} .", brokerDirectory.FullName);
     }
 
     private async Task ConsumeFileAsync(string responseFilePath)
@@ -127,7 +132,7 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
                     new MessageEnvelope(messageKey, messageData),
                     brokerCancellationTokenSource.Token);
 
-                logger.LogInformation("Файл ответа {fileName} был успешно обработан.", fileName);
+                logger.LogDebug("Файл ответа {fileName} был успешно обработан.", fileName);
             }
             catch when (currentRetry <= brokerOptions.RequestRetryCount)
             {
@@ -136,7 +141,7 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
             }
             catch (Exception e)
             {
-                logger.LogInformation(e, "Ошибка при обработке файла ответа {fileName}.", fileName);
+                logger.LogError(e, "Ошибка при обработке файла ответа {fileName}.", fileName);
             }
         
             SafeDelete(responseFilePath);
@@ -163,12 +168,22 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
             {
                 if (!File.Exists(filePath))
                 {
-                    await File.WriteAllBytesAsync(filePath, message.Data, cancellationToken);
-                    logger.LogInformation("Файл {name} был успешно записан.", fileName);
+                    await using var fileStream = new FileStream(
+                        filePath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 4096,
+                        useAsync: true);
+
+                    await fileStream.WriteAsync(message.Data, cancellationToken);
+                    await fileStream.FlushAsync(cancellationToken);
+
+                    logger.LogDebug("Файл {name} был успешно записан.", fileName);
                 }
                 else
                 {
-                    logger.LogInformation("Файл {name} уже существует в папке брокера.", fileName);
+                    logger.LogDebug("Файл {name} уже существует в папке брокера.", fileName);
                 }
             }
             catch when (currentRetry <= brokerOptions.RequestRetryCount)
@@ -211,7 +226,7 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
                             }
                         }
 
-                        logger.LogInformation("Очистка файлов брокера успешно завершена.");
+                        logger.LogDebug("Очистка файлов брокера успешно завершена.");
                     }
                     catch (Exception e)
                     {
@@ -232,7 +247,7 @@ internal class FileMessageBroker : IMessagePublisher, IMessageReader, IDisposabl
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
-                logger.LogInformation("Файла {name} был успешно удален.", fileName);
+                logger.LogDebug("Файл {name} был успешно удален.", fileName);
             }
         }
         catch (Exception e)

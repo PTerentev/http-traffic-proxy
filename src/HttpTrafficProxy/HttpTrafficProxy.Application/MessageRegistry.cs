@@ -8,7 +8,7 @@ internal class MessageRegistry
     private readonly ConcurrentDictionary<string, TaskCompletionSource<MessageEnvelope>> responseWaiters =
         new ConcurrentDictionary<string, TaskCompletionSource<MessageEnvelope>>();
 
-    public Task<MessageEnvelope> Register(string requestKey, CancellationToken cancellationToken)
+    public Task<MessageEnvelope> Register(string requestKey)
     {
         var lazy = new Lazy<TaskCompletionSource<MessageEnvelope>>(() =>
             new TaskCompletionSource<MessageEnvelope>(
@@ -18,15 +18,7 @@ internal class MessageRegistry
 
         if (lazy.IsValueCreated && ReferenceEquals(lazy.Value, taskCompletionSource))
         {
-            var cancellationRegistry = cancellationToken.Register(() => taskCompletionSource.TrySetCanceled());
-
-            taskCompletionSource.Task
-                .ContinueWith(_ =>
-                {
-                    cancellationRegistry.Dispose();
-                    responseWaiters.Remove(requestKey, out var _);
-                },
-                cancellationToken);
+            taskCompletionSource.Task.ContinueWith(_ => responseWaiters.Remove(requestKey, out var _));
         }
 
         return taskCompletionSource.Task;

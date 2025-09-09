@@ -2,5 +2,5 @@
 
 public record ApplicationOptions
 {
-    public required bool UseAdvancedMode = true;
+    public required bool UseAdvancedMode { get; init; } = true;
 }

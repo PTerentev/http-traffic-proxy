@@ -25,7 +25,7 @@ internal class AdvancedProxyRequestHandler : IProxyRequestHandler
         var coalesceKey = coalesceKeyProvider.GetCoalesceKey(request);
         return await advancedRequestCollapser.RunAsync(
             coalesceKey,
-            () => requestHandler.HandleAsync(request, cancellationToken),
+            () => requestHandler.HandleAsync(request, CancellationToken.None),
             cancellationToken);
     }
 }

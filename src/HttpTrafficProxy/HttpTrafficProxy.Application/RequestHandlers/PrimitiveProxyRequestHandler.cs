@@ -1,5 +1,6 @@
 ﻿using HttpTrafficProxy.Application.RequestHandlers.Abstractions;
 using HttpTrafficProxy.Domain;
+using HttpTrafficProxy.Domain.Exceptions;
 using HttpTrafficProxy.Services.Abstractions;
 using HttpTrafficProxy.Services.Abstractions.Messages;
 
@@ -26,10 +27,10 @@ internal class PrimitiveProxyRequestHandler : IProxyRequestHandler
         var requestKey = messageKeyProvider.GetMessageKey(request);
         var messageData = await CreateRequestMessageContentAsync(request, cancellationToken);
 
-        var responseTask = messageRegistry.Register(requestKey, cancellationToken);
+        var responseTask = messageRegistry.Register(requestKey);
         await messagePublisher.PublishAsync(new MessageEnvelope(requestKey, messageData), cancellationToken);
 
-        var responseMessage = await responseTask;
+        var responseMessage = await responseTask.WaitAsync(cancellationToken);
 
         return await ReadResponseMessageAsync(responseMessage, cancellationToken);
     }
@@ -44,7 +45,7 @@ internal class PrimitiveProxyRequestHandler : IProxyRequestHandler
         var statusCodeLine = await streamReader.ReadLineAsync(cancellationToken);
         if (!int.TryParse(statusCodeLine, out var responseStatusCode))
         {
-            throw new ApplicationException("Не удалось прочитать статус код ответа от удаленного сервера.");
+            throw new HttpProxyException("Не удалось прочитать статус код ответа от удаленного сервера.");
         }
 
         var responseBody = await streamReader.ReadToEndAsync(cancellationToken);
@@ -60,6 +61,7 @@ internal class PrimitiveProxyRequestHandler : IProxyRequestHandler
         using var streamWriter = new StreamWriter(memoryStream);
 
         await streamWriter.WriteLineAsync($"{request.Method} | {request.Path}");
+        await streamWriter.FlushAsync(cancellationToken);
 
         return memoryStream.ToArray();
     }
